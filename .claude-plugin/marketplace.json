@@ -1,0 +1,14 @@
+{
+  "name": "claude-speak",
+  "owner": {
+    "name": "Nathan Hekman",
+    "url": "https://github.com/nathan-hekman"
+  },
+  "plugins": [
+    {
+      "name": "claude-speak",
+      "source": "./",
+      "description": "Speaks a short summary of each reply and reads alerts aloud when Claude needs your input. Cross-platform system text-to-speech."
+    }
+  ]
+}
