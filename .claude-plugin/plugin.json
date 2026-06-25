@@ -1,13 +1,13 @@
 {
   "name": "claude-speak",
-  "version": "0.2.0",
-  "description": "Hear Claude Code. Speaks a short summary of each reply in a natural system voice. Toggle and configure with /claude-speak (on/off/setup/voice). Idle alerts are off by default. Works on macOS, Linux, and Windows.",
+  "version": "0.3.0",
+  "description": "Hear Claude Code. Speaks a short summary of each reply in a natural system voice — or, on macOS, your own Personal Voice. Toggle and configure with /claude-speak (on/off/setup/voice/personal-voice). Idle alerts are off by default. Works on macOS, Linux, and Windows.",
   "author": {
     "name": "Nathan Hekman",
     "url": "https://github.com/nathan-hekman"
   },
   "homepage": "https://github.com/nathan-hekman/claude-speak",
   "license": "MIT",
-  "keywords": ["tts", "text-to-speech", "voice", "accessibility", "notifications", "say"],
+  "keywords": ["tts", "text-to-speech", "voice", "personal-voice", "accessibility", "notifications", "say"],
   "hooks": "./hooks/hooks.json"
 }

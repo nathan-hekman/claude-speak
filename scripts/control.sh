@@ -13,6 +13,7 @@
 #   control.sh cap <n>            max characters spoken
 #   control.sh voices             list installed natural (Premium/Enhanced) voices
 #   control.sh allvoices          list every English voice say can use
+#   control.sh personal-voice [<name>]  macOS: authorize + speak in YOUR Personal Voice
 #   control.sh test [<text>]      speak a sample line with current settings
 #   control.sh get <key>          print one config value
 #   control.sh set <key> <value>  raw set (advanced)
@@ -196,6 +197,52 @@ PY
       echo "no TTS engine available on this platform"
     fi ;;
 
+  personal-voice|pv)
+    # macOS: use your Personal Voice (a clone of YOUR voice, created in System
+    # Settings > Accessibility > Personal Voice) as the spoken voice. Apple gates
+    # it behind a one-time per-app authorization; the bundled Swift helper grants
+    # it to whichever app runs this command (the Claude app, your terminal, ...),
+    # after which `say -v "<Your Voice>"` can use it. See README > Personal Voice.
+    case "$(uname)" in Darwin) ;; *) echo "Personal Voice is macOS-only."; exit 1 ;; esac
+    command -v swiftc >/dev/null 2>&1 || { echo "Personal Voice needs Xcode Command Line Tools (swiftc). Run: xcode-select --install"; exit 1; }
+    want="$*"
+    src="$(dirname "$0")/personal-voice-authorize.swift"
+    [ -f "$src" ] || { echo "missing authorizer: $src"; exit 1; }
+    bin="${TMPDIR:-/tmp}/claude-speak-pv-authorize"
+    if [ ! -x "$bin" ] || [ "$src" -nt "$bin" ]; then
+      swiftc -O "$src" -o "$bin" 2>/dev/null || { echo "could not build the Personal Voice authorizer"; exit 1; }
+    fi
+    echo "Requesting Personal Voice access — if a system dialog appears, click Allow..."
+    out="$("$bin" 2>/dev/null)"
+    pvstatus="$(printf '%s\n' "$out" | sed -n 's/^AUTH_STATUS=\([0-9]*\).*/\1/p')"
+    voices="$(printf '%s\n' "$out" | sed -n 's/^PERSONAL_VOICE name=\(.*\) id=.*/\1/p')"
+    if [ "$pvstatus" != "3" ]; then
+      echo "Not authorized (status ${pvstatus:-unknown})."
+      echo "Turn on System Settings > Accessibility > Personal Voice > 'Allow Apps to Request to Use', create a voice, then retry."
+      exit 1
+    fi
+    if [ -z "$voices" ]; then
+      echo "Authorized, but no Personal Voice exists yet. Create one in System Settings > Accessibility > Personal Voice, then retry."
+      exit 1
+    fi
+    if [ -n "$want" ]; then
+      chosen="$(printf '%s\n' "$voices" | grep -iF -- "$want" | head -1)"
+      [ -n "$chosen" ] || { echo "No Personal Voice matches '$want'. Available:"; printf '  %s\n' "$voices"; exit 1; }
+    elif [ "$(printf '%s\n' "$voices" | grep -c .)" = "1" ]; then
+      chosen="$voices"
+    else
+      echo "You have multiple Personal Voices — choose one with:"
+      echo "  /claude-speak personal-voice \"<name>\""
+      printf '  %s\n' "$voices"
+      exit 0
+    fi
+    set_key engine '"system"'
+    set_key voice "$("$PY" -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$chosen")"
+    set_key enabled true
+    echo "Personal Voice set: $chosen   (engine=system, speaking ON)"
+    printf '%s' "This is your Personal Voice, now reading Claude's replies." | say -v "$chosen" 2>/dev/null
+    ;;
+
   status)
     ensure_config
     echo "config: $CONFIG"
@@ -216,5 +263,5 @@ PY
 
   init) ensure_config; echo "wrote $CONFIG" ;;
 
-  *) echo "unknown command: $cmd"; echo "try: on | off | setup | status | voice | test | notify on|off"; exit 1 ;;
+  *) echo "unknown command: $cmd"; echo "try: on | off | setup | status | voice | personal-voice | test | notify on|off"; exit 1 ;;
 esac

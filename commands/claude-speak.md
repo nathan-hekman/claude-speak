@@ -1,6 +1,6 @@
 ---
-description: Control claude-speak — speak Claude's replies aloud (on/off/setup/voice/status/test)
-argument-hint: "[on | off | setup | status | voice <name> | test | notify on|off | recap on|off]"
+description: Control claude-speak — speak Claude's replies aloud (on/off/setup/voice/personal-voice/status/test)
+argument-hint: "[on | off | setup | status | voice <name> | personal-voice [<name>] | test | notify on|off | recap on|off]"
 allowed-tools: Bash, AskUserQuestion
 ---
 
@@ -14,6 +14,7 @@ The plugin's control script is at `${CLAUDE_PLUGIN_ROOT}/scripts/control.sh`. Ru
 - `on` / `off` → run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/control.sh" on` (or `off`). Confirm in one line.
 - `test` → run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/control.sh" test`. Tell the user to listen.
 - `voice <name>` → run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/control.sh" voice "<name>"`, then `... test` so they hear it.
+- `personal-voice [<name>]` (macOS — speak in the user's own Personal Voice) → run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/control.sh" personal-voice "<name>"` (omit the name to auto-pick a single voice or list multiples). A one-time system dialog may appear — tell the user to click **Allow**. On success it sets `engine=system`, selects the voice, and turns speaking on.
 - `notify on|off`, `recap on|off`, `rate <n>`, `cap <n>` → pass straight through to control.sh.
 - `setup` (or empty arg on first ever run) → run the **Setup flow** below.
 

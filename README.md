@@ -51,6 +51,7 @@ If no TTS engine or `jq` is found, the plugin stays silent — it never errors.
 | `/claude-speak on` / `off` | Enable / mute (stays installed). |
 | `/claude-speak setup` | Guided voice picker; can install Piper. |
 | `/claude-speak voice <name>` | Set the **system** TTS voice (macOS: any `say -v '?'` name). |
+| `/claude-speak personal-voice [<name>]` | **macOS:** authorize + speak replies in your own **Personal Voice**. |
 | `/claude-speak test [text]` | Speak a sample line with the current settings. |
 | `/claude-speak notify on` / `off` | Speak idle/permission alerts. Default **off**. |
 | `/claude-speak recap on` / `off` | Model-generated 1-2 sentence recap when a reply has no `TL;DR`. Default **off**. |
@@ -85,6 +86,28 @@ then `/claude-speak voice "Zoe (Enhanced)"`.
 
 > Note: macOS blocks **Siri** voices from the `say` command, so they can't be
 > used here. Premium/Enhanced are the best built-in option; Piper is better still.
+
+### Personal Voice (macOS — your own cloned voice)
+
+macOS can read Claude's replies in **your own voice**. First create one in
+**System Settings → Accessibility → Personal Voice** (and turn on *Allow Apps to
+Request to Use*). Then:
+
+```text
+/claude-speak personal-voice
+```
+
+This authorizes the app running claude-speak to use Personal Voice (approve the
+one-time system dialog), selects your voice, and sets `engine=system`. With more
+than one Personal Voice, name it: `/claude-speak personal-voice "My Voice"`.
+
+How it works: Apple only exposes Personal Voice to apps holding a per-app
+authorization, so plain `say -v` can't reach it by default. The bundled
+[`personal-voice-authorize.swift`](scripts/personal-voice-authorize.swift) calls
+Apple's public `requestPersonalVoiceAuthorization` API — no private API,
+entitlement, or code injection. The grant attaches to the app that runs `say`
+(the Claude app, your terminal, ...), so run the command from the same place
+claude-speak runs. macOS only; a headless/SSH host has no dialog to approve.
 
 ## Configuration
 
