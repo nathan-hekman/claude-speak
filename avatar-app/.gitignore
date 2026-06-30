@@ -1,0 +1,12 @@
+# deps + build output
+node_modules/
+dist/
+*.log
+
+# Vendored avatar GLBs are large (~32 MB) and are Nathan's Meshy-derived models. They're
+# kept OUT of the published claude-speak repo so the TTS plugin stays lean. Repopulate them
+# from your claudette checkout with ./sync-avatar.sh before `npm run dist`. The built .app
+# bundles whatever GLBs are present locally, so the shipped app is still self-contained.
+renderer/vendor/*.glb
+
+.DS_Store

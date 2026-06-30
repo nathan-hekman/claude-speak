@@ -14,6 +14,7 @@
 #   control.sh voices             list installed natural (Premium/Enhanced) voices
 #   control.sh allvoices          list every English voice say can use
 #   control.sh personal-voice [<name>]  macOS: authorize + speak in YOUR Personal Voice
+#   control.sh avatar [on|off|status]   launch/quit the floating desktop avatar (lip-syncs)
 #   control.sh test [<text>]      speak a sample line with current settings
 #   control.sh get <key>          print one config value
 #   control.sh set <key> <value>  raw set (advanced)
@@ -86,6 +87,22 @@ PY
 
 list_natural() { say -v '?' 2>/dev/null | grep -iE '\((Premium|Enhanced)\)' ; }
 list_english() { say -v '?' 2>/dev/null | grep -iE 'en[_-]' ; }
+
+# ---- optional floating avatar (the Claudette desktop app in ../avatar-app) ----
+PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+avatar_app_path() {
+  for p in \
+    "/Applications/Claudette Avatar.app" \
+    "$PLUGIN_ROOT/avatar-app/dist/mac-arm64/Claudette Avatar.app" \
+    "$PLUGIN_ROOT/avatar-app/dist/mac/Claudette Avatar.app"; do
+    [ -d "$p" ] && { printf '%s' "$p"; return; }
+  done
+}
+avatar_port() { get_key avatar_port 8456; }
+avatar_running() {
+  command -v curl >/dev/null 2>&1 || return 1
+  [ "$(curl -s -m 1 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(avatar_port)/health" 2>/dev/null)" = "200" ]
+}
 
 cmd="${1:-status}"; shift 2>/dev/null
 
@@ -243,6 +260,32 @@ PY
     printf '%s' "This is your Personal Voice, now reading Claude's replies." | say -v "$chosen" 2>/dev/null
     ;;
 
+  avatar)
+    case "${1:-open}" in
+      on|open|start|launch)
+        appp="$(avatar_app_path)"
+        if [ -z "$appp" ]; then
+          echo "Claudette Avatar isn't built yet. Build the unsigned app:"
+          echo "  cd \"$PLUGIN_ROOT/avatar-app\" && npm install && npm run dist"
+          echo "then: /claude-speak avatar"
+          echo "(or run it in place without building: cd \"$PLUGIN_ROOT/avatar-app\" && npm start)"
+          exit 1
+        fi
+        open "$appp" && echo "Launched the floating avatar: $appp"
+        echo "It rides on top of every window and lip-syncs whatever claude-speak speaks."
+        echo "Look, model, backgrounds, and the voice on/off live in its menu-bar icon." ;;
+      off|quit|stop)
+        osascript -e 'quit app "Claudette Avatar"' 2>/dev/null
+        echo "Asked Claudette Avatar to quit (it'll offer to mute the voice too)." ;;
+      status)
+        if avatar_running; then echo "Claudette Avatar: RUNNING (port $(avatar_port))"
+        else echo "Claudette Avatar: not running"; fi
+        echo "hand-off:  $(get_key avatar true)   (speak.sh feeds the avatar when it's up)" ;;
+      enable)  set_key avatar true;  echo "Avatar hand-off: ON" ;;
+      disable) set_key avatar false; echo "Avatar hand-off: OFF (speak.sh always plays audio itself)" ;;
+      *) echo "usage: /claude-speak avatar [on|off|status|enable|disable]" ;;
+    esac ;;
+
   status)
     ensure_config
     echo "config: $CONFIG"
@@ -255,7 +298,10 @@ PY
     echo "cap:                 $(get_key cap 500) chars"
     echo "speak_notifications: $(get_key speak_notifications false)   (the 'waiting for input' voice)"
     echo "recap:               $(get_key recap false)"
-    echo "marker:              $(get_key marker 'TL;?DR')" ;;
+    echo "marker:              $(get_key marker 'TL;?DR')"
+    echo "avatar hand-off:     $(get_key avatar true)   (feed the floating avatar when it's running)"
+    echo "avatar port:         $(avatar_port)"
+    if avatar_running; then echo "avatar app:          RUNNING"; else echo "avatar app:          not running (start with /claude-speak avatar)"; fi ;;
 
   get)  get_key "${1:-}" '' ;;
   set)  set_key "${1:-}" "$("$PY" -c 'import json,sys;print(json.dumps(sys.argv[1]))' "${2:-}")"; echo "set ${1:-}=${2:-}" ;;
@@ -263,5 +309,5 @@ PY
 
   init) ensure_config; echo "wrote $CONFIG" ;;
 
-  *) echo "unknown command: $cmd"; echo "try: on | off | setup | status | voice | personal-voice | test | notify on|off"; exit 1 ;;
+  *) echo "unknown command: $cmd"; echo "try: on | off | setup | status | voice | personal-voice | test | notify on|off | avatar"; exit 1 ;;
 esac

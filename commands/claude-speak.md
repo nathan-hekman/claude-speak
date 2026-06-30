@@ -1,6 +1,6 @@
 ---
 description: Control claude-speak — speak Claude's replies aloud (on/off/setup/voice/personal-voice/status/test)
-argument-hint: "[on | off | setup | status | voice <name> | personal-voice [<name>] | test | notify on|off | recap on|off]"
+argument-hint: "[on | off | setup | status | voice <name> | personal-voice [<name>] | avatar [on|off] | test | notify on|off | recap on|off]"
 allowed-tools: Bash, AskUserQuestion
 ---
 
@@ -15,6 +15,7 @@ The plugin's control script is at `${CLAUDE_PLUGIN_ROOT}/scripts/control.sh`. Ru
 - `test` → run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/control.sh" test`. Tell the user to listen.
 - `voice <name>` → run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/control.sh" voice "<name>"`, then `... test` so they hear it.
 - `personal-voice [<name>]` (macOS — speak in the user's own Personal Voice) → run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/control.sh" personal-voice "<name>"` (omit the name to auto-pick a single voice or list multiples). A one-time system dialog may appear — tell the user to click **Allow**. On success it sets `engine=system`, selects the voice, and turns speaking on.
+- `avatar [on|off|status]` (macOS — the optional floating desktop avatar that lip-syncs to whatever claude-speak speaks) → run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/control.sh" avatar <sub>`. Bare `avatar` (or `avatar on`) launches the app; `off` quits it; `status` reports whether it's running. If it isn't built yet, the script prints the one-time build steps (`cd avatar-app && npm install && npm run dist`) — relay those.
 - `notify on|off`, `recap on|off`, `rate <n>`, `cap <n>` → pass straight through to control.sh.
 - `setup` (or empty arg on first ever run) → run the **Setup flow** below.
 

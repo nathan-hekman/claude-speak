@@ -8,7 +8,7 @@
     {
       "name": "claude-speak",
       "source": "./",
-      "description": "Speaks a short summary of each reply and reads alerts aloud when Claude needs your input. Cross-platform system text-to-speech."
+      "description": "Speaks a short summary of each reply and reads alerts aloud when Claude needs your input. Cross-platform system text-to-speech, with an optional floating desktop avatar (Claudette) that lip-syncs to the speech on macOS."
     }
   ]
 }

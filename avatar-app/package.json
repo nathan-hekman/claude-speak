@@ -1,0 +1,33 @@
+{
+  "name": "claudette-avatar",
+  "productName": "Claudette Avatar",
+  "version": "0.1.0",
+  "description": "Floating, always-on-top Claudette avatar that lip-syncs to claude-speak's audio.",
+  "author": "Nathan Hekman",
+  "license": "MIT",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "build": {
+    "appId": "app.claudette.avatar",
+    "productName": "Claudette Avatar",
+    "asar": false,
+    "files": ["src/**", "renderer/**", "assets/**"],
+    "directories": { "output": "dist" },
+    "mac": {
+      "target": "dir",
+      "identity": null,
+      "icon": "assets/icon.png",
+      "category": "public.app-category.developer-tools"
+    }
+  }
+}

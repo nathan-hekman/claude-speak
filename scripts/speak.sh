@@ -89,6 +89,13 @@ ENGINE="$(cfg engine auto CLAUDE_SPEAK_ENGINE)"
 PIPER_BIN="$(cfg piper_bin '' CLAUDE_SPEAK_PIPER_BIN)"
 PIPER_MODEL="$(cfg piper_model '' CLAUDE_SPEAK_PIPER_MODEL)"
 
+# Optional floating avatar (the Claudette desktop app, in ./avatar-app). When it's
+# running we render the reply to a WAV and hand it the audio + text; the avatar plays
+# it and lip-syncs, so speak.sh stays silent. When it's NOT running the handoff fails
+# fast and we fall through to normal local playback below. Off via avatar=false / env.
+AVATAR="$(cfg avatar 1 CLAUDE_SPEAK_AVATAR)"
+AVATAR_PORT="$(cfg avatar_port 8456 CLAUDE_SPEAK_AVATAR_PORT)"
+
 # Resolve a usable piper binary (config -> PATH -> ~/.local/bin).
 resolve_piper() {
   if [ -n "$PIPER_BIN" ] && [ -x "$PIPER_BIN" ]; then printf '%s' "$PIPER_BIN"; return; fi
@@ -110,6 +117,42 @@ piper_speak() {
   elif command -v aplay >/dev/null 2>&1; then aplay -q "$wav"
   else rm -f "$wav"; return 1; fi
   rm -f "$wav"; return 0
+}
+
+# Render speech to a WAV file (no playback) for the avatar to analyse. Mirrors the engine
+# used for live playback: Piper when selected/available, else macOS `say -o` (which keeps
+# your Personal Voice and writes 16-bit PCM the avatar's <audio> element decodes cleanly).
+render_wav() {
+  _txt="$1"; _out="$2"; _pb=""
+  case "$ENGINE" in piper|auto) _pb="$(resolve_piper)" ;; esac
+  if [ -n "$_pb" ] && [ -n "$PIPER_MODEL" ] && [ -f "$PIPER_MODEL" ]; then
+    printf '%s' "$_txt" | "$_pb" -m "$PIPER_MODEL" -f "$_out" >/dev/null 2>&1 || return 1
+    [ -s "$_out" ]; return
+  fi
+  if command -v say >/dev/null 2>&1; then
+    a=(); [ -n "$VOICE" ] && a=(-v "$VOICE"); [ -n "$RATE" ] && a=("${a[@]}" -r "$RATE")
+    printf '%s' "$_txt" | say "${a[@]}" --data-format=LEI16@22050 -o "$_out" >/dev/null 2>&1 || return 1
+    [ -s "$_out" ]; return
+  fi
+  return 1
+}
+
+# If the floating Claudette avatar is running, render the speech and POST it (base64 JSON)
+# to the app's bridge. Returns 0 ONLY when the avatar accepted it, so the caller skips local
+# playback (the avatar owns the audio). Any miss -> 1 -> normal local TTS plays. A closed
+# port fails the probe near-instantly, so this costs ~nothing when the avatar isn't up.
+avatar_handoff() {
+  truthy "$AVATAR" || return 1
+  command -v curl >/dev/null 2>&1 || return 1
+  [ "$(curl -s -m 0.6 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$AVATAR_PORT/health" 2>/dev/null)" = "200" ] || return 1
+  wav="$(mktemp -t claude-speak-avatar).wav"
+  render_wav "$1" "$wav" || { rm -f "$wav"; return 1; }
+  b64="$(base64 < "$wav" | tr -d '\n')"; rm -f "$wav"
+  [ -n "$b64" ] || return 1
+  payload="$(jq -n --arg t "$1" --arg b "$b64" '{text:$t,b64:$b,format:"wav"}')" || return 1
+  [ "$(printf '%s' "$payload" | curl -s -m 12 -o /dev/null -w '%{http_code}' \
+      -X POST -H 'Content-Type: application/json' --data-binary @- \
+      "http://127.0.0.1:$AVATAR_PORT/speak" 2>/dev/null)" = "200" ]
 }
 
 # Generate a 1-2 sentence spoken recap of a reply via a fast headless model.
@@ -182,6 +225,10 @@ if [ "$dry" = "1" ]; then
   printf '%s\n' "$spoken"
   exit 0
 fi
+
+# If the floating avatar is up, it plays the audio + lip-syncs; we're done. Otherwise
+# (POST refused / no curl / disabled) fall through and play locally exactly as before.
+avatar_handoff "$spoken" && exit 0
 
 # Prefer Piper when selected (engine=piper) or available in auto mode.
 if [ "$ENGINE" = "piper" ]; then

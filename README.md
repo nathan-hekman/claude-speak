@@ -13,7 +13,10 @@ still follow along.
   the whole verbose reply.
 - **Quiet by default.** The naggy "Claude is waiting for your input" alert is
   **off** unless you turn it on.
-- **One command to drive it:** `/claude-speak on | off | setup | voice | status`.
+- **Optional floating avatar (macOS).** A frameless, always-on-top desktop head
+  (Claudette) that **lip-syncs** to whatever claude-speak speaks — see
+  [Floating desktop avatar](#floating-desktop-avatar-macos).
+- **One command to drive it:** `/claude-speak on | off | setup | voice | avatar | status`.
 
 ## Install
 
@@ -52,6 +55,7 @@ If no TTS engine or `jq` is found, the plugin stays silent — it never errors.
 | `/claude-speak setup` | Guided voice picker; can install Piper. |
 | `/claude-speak voice <name>` | Set the **system** TTS voice (macOS: any `say -v '?'` name). |
 | `/claude-speak personal-voice [<name>]` | **macOS:** authorize + speak replies in your own **Personal Voice**. |
+| `/claude-speak avatar [on\|off\|status]` | **macOS:** launch / quit the floating desktop avatar that lip-syncs. |
 | `/claude-speak test [text]` | Speak a sample line with the current settings. |
 | `/claude-speak notify on` / `off` | Speak idle/permission alerts. Default **off**. |
 | `/claude-speak recap on` / `off` | Model-generated 1-2 sentence recap when a reply has no `TL;DR`. Default **off**. |
@@ -109,6 +113,47 @@ entitlement, or code injection. The grant attaches to the app that runs `say`
 (the Claude app, your terminal, ...), so run the command from the same place
 claude-speak runs. macOS only; a headless/SSH host has no dialog to approve.
 
+## Floating desktop avatar (macOS)
+
+An optional, frameless, always-on-top desktop head — **Claudette** — that
+lip-syncs to whatever claude-speak speaks. It reuses the avatar (3D head, real
+viseme lip-sync, and the look/feel settings) from the
+[claudette](https://github.com/nathan-hekman) project, wrapped in a small Electron
+app under [`avatar-app/`](avatar-app/).
+
+**How the hand-off works.** When the avatar is running, `speak.sh` renders each
+reply to a WAV (keeping your Personal Voice), POSTs it to the app's local bridge
+(`127.0.0.1:8456`), and the avatar plays it + drives the mouth — so `speak.sh`
+itself stays silent. When the avatar **isn't** running the POST fails instantly
+and claude-speak plays the audio itself, exactly as before. Nothing to toggle:
+the routing follows whether the app is up.
+
+**Build it once** (unsigned local app, no code-signing needed):
+
+```bash
+cd avatar-app
+./sync-avatar.sh        # pull the avatar + GLB models from your claudette checkout
+npm install
+npm run dist            # builds dist/mac-arm64/Claudette Avatar.app
+```
+
+**Run it:**
+
+```text
+/claude-speak avatar        # launch (or: open the built .app)
+/claude-speak avatar off    # quit
+/claude-speak avatar status # is it running?
+```
+
+- **Controls** live in its menu-bar icon: show/hide, settings, recenter, a voice
+  on/off toggle, and quit. Hover the top of the window for a drag strip + a gear
+  that opens the full look/feel panel (look, model, background, expressions, idle
+  tuners). Drag her by that strip; the rest of the window orbits/zooms the head.
+- **Opening the app offers to turn claude-speak on** if it's off; **quitting it
+  asks whether to mute claude-speak too** or just close the avatar.
+- The avatar's code + GLB models are **vendored** into `avatar-app/`. After you
+  improve the avatar in claudette, re-run `./sync-avatar.sh` and `npm run dist`.
+
 ## Configuration
 
 State lives in `~/.config/claude-speak/config.json` (written by `/claude-speak`).
@@ -127,6 +172,8 @@ overrides the matching key, for power users who prefer to pin values in the
 | `CLAUDE_SPEAK_MARKER` | `marker` | `TL;?DR` | Regex; speak from this line onward. Matches `TL;DR`, `TLDR`, `TLDR [ds-mode]`. |
 | `CLAUDE_SPEAK_NOTIFY` | `speak_notifications` | `false` | Speak idle/permission alerts. |
 | `CLAUDE_SPEAK_RECAP` | `recap` | `false` | Model recap fallback. |
+| `CLAUDE_SPEAK_AVATAR` | `avatar` | `true` | Hand audio to the floating avatar when it's running. |
+| `CLAUDE_SPEAK_AVATAR_PORT` | `avatar_port` | `8456` | Local bridge port the avatar listens on. |
 
 ## How it works
 

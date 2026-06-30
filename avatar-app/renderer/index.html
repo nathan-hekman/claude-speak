@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Claudette Avatar</title>
+<!-- Same import map the claudette PWA uses; served by this app's own localhost server. -->
+<script type="importmap">
+{ "imports": { "three": "/vendor/three.module.js", "three/addons/": "/vendor/three-addons/" } }
+</script>
+<style>
+  :root { --cyan:#5fd4ff; --ink:#dce8f5; --faint:#6f8398; }
+  * { box-sizing: border-box; }
+  /* Fully transparent so only the avatar shows, floating on the desktop. */
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink); user-select: none; }
+
+  /* animated world layer BEHIND her (matrix/grid/aurora/solid). Default = none (transparent). */
+  #ccAvatarStage { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  #avatar { position: fixed; inset: 0; z-index: 1; touch-action: none; }
+  #avatar canvas { width: 100% !important; height: 100% !important; display: block; }
+  #avatarGlow { position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: radial-gradient(120% 90% at 50% 22%, transparent 56%, rgba(2,6,15,0.28) 100%); opacity: 0; transition: opacity .3s; }
+  body.glow #avatarGlow { opacity: 1; }
+
+  /* hover-reveal top bar: drag to move the window; gear opens settings; × hides. */
+  #bar { position: fixed; top: 0; left: 0; right: 0; height: 30px; z-index: 6;
+    -webkit-app-region: drag; display: flex; align-items: center; gap: 6px; padding: 0 8px;
+    opacity: 0; transition: opacity .18s; background: linear-gradient(180deg, rgba(4,10,18,.85), rgba(4,10,18,.15)); }
+  /* Revealed by JS (see below), NOT :hover — the drag region swallows :hover, which made
+     the bar vanish the moment you reached for it. */
+  #bar.show { opacity: 1; }
+  #bar .sp { flex: 1; }
+  #bar .grip { color: var(--faint); font-size: 12px; letter-spacing: .12em; -webkit-app-region: drag; }
+  .btn { -webkit-app-region: no-drag; width: 22px; height: 22px; border-radius: 7px;
+    border: 1px solid rgba(95,212,255,.30); background: rgba(8,20,34,.62); color: var(--cyan);
+    font-size: 13px; line-height: 1; display: grid; place-items: center; cursor: pointer; }
+  .btn:active { transform: scale(.92); }
+
+  /* settings overlay */
+  #settings { position: fixed; inset: 0; z-index: 10; display: none; flex-direction: column;
+    background: rgba(2,6,15,.95); backdrop-filter: blur(8px); padding: 10px 12px 14px; }
+  #settings.open { display: flex; }
+  #settings .shead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  #settings .shead h2 { margin: 0; font-size: 12px; letter-spacing: .16em; color: var(--cyan); flex: 1; }
+  #settingsBody { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; }
+  /* voice toggle row */
+  #voiceRow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 4px 12px; border-bottom: 1px solid rgba(95,212,255,.14); margin-bottom: 8px; font-size: 12px; }
+  #voiceRow b { color: var(--cyan); letter-spacing: .08em; }
+  #voiceToggle { -webkit-app-region: no-drag; cursor: pointer; padding: 6px 12px; border-radius: 9px;
+    border: 1px solid rgba(95,212,255,.4); background: rgba(95,212,255,.1); color: var(--cyan);
+    font: 600 11px ui-monospace, Menlo, monospace; letter-spacing: .08em; }
+  #voiceToggle.off { border-color: rgba(255,90,110,.45); background: rgba(255,90,110,.08); color: #ff8a98; }
+  #err { position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 12; display: none;
+    font-size: 10px; color: #ffd7dc; background: rgba(40,12,16,.92); border: 1px solid rgba(255,90,110,.5);
+    border-radius: 8px; padding: 6px 8px; }
+</style>
+</head>
+<body>
+  <div id="ccAvatarStage"></div>
+  <div id="avatar" aria-label="Claudette"></div>
+  <div id="avatarGlow"></div>
+
+  <header id="bar">
+    <span class="grip">CLAUDETTE</span>
+    <span class="sp"></span>
+    <button class="btn" id="gearBtn" title="Settings">&#9881;</button>
+    <button class="btn" id="hideBtn" title="Hide">&minus;</button>
+  </header>
+
+  <section id="settings">
+    <div class="shead"><h2>SETTINGS</h2><button class="btn" id="settingsClose">&times;</button></div>
+    <div id="voiceRow">
+      <span><b>claude-speak voice</b><br><span style="color:var(--faint)">speaks Claude Code replies</span></span>
+      <button id="voiceToggle">…</button>
+    </div>
+    <div id="settingsBody"></div>
+  </section>
+
+  <div id="err"></div>
+
+<script>
+  // Desktop defaults (first run only — the user can change both in Settings, and their
+  // choice then persists): the textured 3D "original" look, and NO world background so
+  // she floats on pure transparency instead of a rectangle of matrix/aurora.
+  try {
+    if (!localStorage.getItem("claudette.look")) localStorage.setItem("claudette.look", "original");
+    if (!localStorage.getItem("claudette.bg")) localStorage.setItem("claudette.bg", "default");
+  } catch (_) {}
+</script>
+
+<!-- avatar core (loader dynamically imports the module -> head3d -> three) + settings + backgrounds -->
+<script src="/cc/avatar-ascii3d-loader.js"></script>
+<script src="/cc/avatar-settings.js"></script>
+<script src="/cc/avatar-bg.js"></script>
+
+<script>
+(() => {
+  const errEl = document.getElementById("err");
+  function showErr(m) { if (!errEl) return; errEl.textContent = m; errEl.style.display = "block"; }
+
+  // ---- pushed-speech queue + lip-sync (mirrors the claudette PWA's SSE path, but the
+  // audio arrives over IPC from claude-speak instead of an EventSource). One <audio>
+  // element + one AudioContext, reused across utterances, so the avatar's analyser only
+  // creates a single MediaElementSource (it caches it on the element). ----
+  const speechAudio = new Audio();
+  speechAudio.preload = "auto";
+  let ctx = null, q = [], busy = false;
+  function ensureCtx() {
+    if (!ctx || ctx.state === "closed") ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return ctx;
+  }
+  const MIME = { wav: "audio/wav", mp3: "audio/mpeg", aiff: "audio/aiff", aif: "audio/aiff" };
+
+  function setSpeaking(on) {
+    if (window.AvatarAnim) AvatarAnim.setState(on ? "speaking" : "idle");
+  }
+
+  function playNext() {
+    if (!q.length) {
+      busy = false;
+      setSpeaking(false);
+      if (window.AvatarAnim && AvatarAnim.detachAudio) AvatarAnim.detachAudio();
+      return;
+    }
+    busy = true;
+    const item = q.shift();
+    speechAudio.src = "data:" + (MIME[item.format] || "audio/wav") + ";base64," + item.b64;
+    speechAudio.onended = playNext;
+    speechAudio.onerror = () => { showErr("audio decode failed (" + (item.format || "?") + ")"); playNext(); };
+    const c = ensureCtx();
+    if (window.AvatarAnim) AvatarAnim.attachAudio(speechAudio, c); // spectral lip-sync drives the mouth
+    const go = () => speechAudio.play().catch(() => playNext());
+    if (c.state !== "running") c.resume().then(go, go); else go();
+  }
+
+  function speak({ b64, text, format }) {
+    if (!b64) return;
+    q.push({ b64, format: (format || "wav").toLowerCase() });
+    setSpeaking(true);
+    if (!busy) playNext();
+  }
+
+  if (window.bridge && bridge.onSpeak) bridge.onSpeak(speak);
+  else showErr("bridge unavailable (preload didn't load)");
+
+  // ---- top bar reveal (sticky; survives moving onto the drag strip, which eats :hover) ----
+  const bar = document.getElementById("bar");
+  let barTimer = null;
+  function revealBar() {
+    bar.classList.add("show");
+    clearTimeout(barTimer);
+    barTimer = setTimeout(() => bar.classList.remove("show"), 2200);
+  }
+  // Reveal whenever the cursor is in the upper region (her head + the bar). The drag strip
+  // itself eats mousemove, so the 2.2s sticky timeout keeps the bar up while you move onto
+  // it to grab/drag — fixing the old "header vanishes when you reach for it" bug.
+  window.addEventListener("mousemove", (e) => { if (e.clientY < 110) revealBar(); }, { passive: true });
+  setTimeout(revealBar, 700);   // brief "here are the controls" hint on launch
+
+  // ---- top-bar buttons ----
+  const settings = document.getElementById("settings");
+  function openSettings(open) {
+    settings.classList.toggle("open", open);
+    if (open && window.AvatarSettings && !settings.dataset.mounted) {
+      try { AvatarSettings.mount(document.getElementById("settingsBody")); settings.dataset.mounted = "1"; }
+      catch (e) { document.getElementById("settingsBody").textContent = "settings failed: " + e.message; }
+    }
+    if (open) refreshVoiceToggle();
+  }
+  document.getElementById("gearBtn").addEventListener("click", () => openSettings(true));
+  document.getElementById("settingsClose").addEventListener("click", () => openSettings(false));
+  document.getElementById("hideBtn").addEventListener("click", () => {
+    // No direct window control from the renderer; the tray "Hide avatar" does it. As a
+    // renderer-side fallback, just minimize visibility by hiding the avatar layer.
+    document.body.style.visibility = "hidden";
+    setTimeout(() => (document.body.style.visibility = ""), 1200); // brief peekaboo; real hide is via tray
+  });
+  if (window.bridge && bridge.onToggleSettings) bridge.onToggleSettings(() => openSettings(!settings.classList.contains("open")));
+
+  // ---- claude-speak voice toggle (talks to main via IPC) ----
+  const voiceToggle = document.getElementById("voiceToggle");
+  async function refreshVoiceToggle() {
+    if (!window.bridge) return;
+    const on = await bridge.csEnabled();
+    voiceToggle.textContent = on ? "ON" : "OFF";
+    voiceToggle.classList.toggle("off", !on);
+    voiceToggle.dataset.on = on ? "1" : "0";
+  }
+  voiceToggle.addEventListener("click", async () => {
+    if (!window.bridge) return;
+    const next = voiceToggle.dataset.on !== "1";
+    bridge.csSetEnabled(next);
+    setTimeout(refreshVoiceToggle, 80);
+  });
+
+  // Surface a hard avatar-load error (WebGL blocked, missing GLB) if the host reports one.
+  const host = document.getElementById("avatar");
+  new MutationObserver(() => { if (host.dataset.error) showErr("avatar: " + host.dataset.error); })
+    .observe(host, { attributes: true, attributeFilter: ["data-error"] });
+})();
+</script>
+</body>
+</html>
